@@ -1,0 +1,245 @@
+/* REXX                                                             */
+/* SDSFMAIL                                                         */
+/* This code will take any output matching the dest variable        */
+/* with a form that matches a member name in the email address book */
+/* and send that output to the email addresses in that member       */
+/* If successful it will change the destination to newdest variable */
+/*                                                                  */
+/* This can be executed as an exec in TSO or as a system REXX       */
+/* Paul Lemons email antlerhill@proton.mail)                        */
+/*                                                                  */
+/* Change log                                                       */
+/* 09/13/2023 - Added prompt variable                               */
+/* 08/24/2023 - Added timezone code from Lionel Dyck's code         */
+/*              that was provided by Leland Lucius                  */
+/* 08/20/2023 - Modified to be more RFC compliant with assistance   */
+/*              of Brian Westerman                                  */
+/* 02/15/2022 - Paul Lemons - Vericast Harland Clarke - Inception   */
+/* ---------------------------------------------------------------- */
+/* set defaults */
+trace err
+/* set prompt to YES if running under TSO/ISPF                       */
+/* set prompt to NO if running as a system rexx                      */
+prompt = 'YES'                    /* prompt with "***"               */
+parse arg dest .
+if length(dest) = 0 then do
+  dest = 'EMAIL'
+end
+subject = 'z/OS Email message'  /* Subject for email */
+isfdest = dest                  /* Destination filter */
+newdest = 'XMAIL'               /* New destination */
+ext = 'txt'                     /* File attachment extension */
+pds = 'CLK2.L3.EMAIL.ADDR.BOOK' /* Address book PDS */
+sndr = 'EMS.Post.Master@harlandclarke.com' /* Sender email address */
+isfprefix = '*'                 /* Job mask filter */
+/* end of set defaults */
+call timezone
+recpt = ''
+/* Only look at output with specific destination */
+/* Pre-work to call ISF */
+rc=isfcalls('ON')
+/* Access the SDSF output display */
+address SDSF "ISFEXEC O"
+lrc=rc
+/* call error_exit on error */
+call msgrtn
+if lrc<>0 then exit 20
+
+/* Loop for all jobs with that destination */
+do ix=1 to destn.0
+  if destn.ix = dest then
+    do
+     member = forms.ix
+     dsn = space(pds '(' member ')',0)
+     available = SYSDSN("'"dsn"'")
+     if available = 'OK' then do
+        /* Issue the SA action against the row to */
+        /* allocate all data sets in the job.     */
+        ADDRESS SDSF "ISFACT O TOKEN('"TOKEN.ix"') PARM(NP SA)"
+        lrc=rc
+        call msgrtn
+        if lrc<>0 then
+          exit 20
+        /* The data set name for each allocated data    */
+        /* set is contained in the isfdsname stem.  The */
+        /* ddname returned by allocation is contained   */
+        /* in the isfddname stem.                       */
+        /* Say "Number of data sets allocated:" value(isfdsname".0") */
+        /* Read the records from each data set and list them */
+        do jx=1 to isfddname.0
+         "EXECIO * DISKR" isfddname.jx "(STEM line. FINIS"
+         do kx = 1 to line.0
+            output.kx = line.kx
+          end
+        call emailit
+      end
+    end
+  end
+end
+rc=isfcalls('OFF')
+exit
+
+/* Subroutine to list error messages */
+msgrtn: procedure expose isfmsg isfmsg2.
+/* The isfmsg variable contains a short message */
+if isfmsg<>"" then
+/* The isfmsg2 stem contains needed data */
+do ix=1 to isfmsg2.0
+end
+return
+
+emailit:
+/* Read the email address book */
+/* If all goes well then send the output to SMTP */
+"alloc fi(mailbook) da('"dsn"') shr"
+"execio * diskr mailbook (stem mline. finis"
+reccnt = 0
+if mline.0 > 0 then do
+  recpt = ''
+  i = 0
+  cnt = mline.0
+  do until i = cnt
+    i = i + 1
+    parse var mline.i info
+    select
+      when word(info,1) = 'email' then do
+        reccnt = reccnt + 1
+        recpt.reccnt = word(info,2)
+        end
+      when word(info,1) = 'subject' then do
+        subjectpos = pos(info,'subject')
+        subjectpos = subjectpos + 9
+        subject = space(substr(info,subjectpos))
+        end
+      when word(info,1) = 'ext' then do
+        ext = word(info,2)
+        end
+      otherwise
+        nop
+      end
+    end
+  end
+if reccnt = 0 then do
+  say 'no email address found'
+  exit
+end
+/* Change the destination from email to xmail */
+"free fi(mailbook)"
+/* prep to send output to SMTP */
+'alloc fi(smtpout) sysout(b) writer(smtp)'
+"newstack"
+queue 'helo ' mvsvar(sysname)
+queue 'mail from:<'sndr'>'
+rcptcnt = 0
+tocnt = 0
+do until rcptcnt =  reccnt
+  rcptcnt = rcptcnt + 1
+  queue 'rcpt to:<'recpt.rcptcnt'>'
+end
+queue 'data'
+queue 'Sender: <'sndr'>'
+queue 'Date: ' substr(date('w'),1,3) date('n') time('n') zone
+queue 'from: <'sndr'>'
+do until tocnt =  rcptcnt
+  tocnt = tocnt + 1
+  queue 'to:<'recpt.rcptcnt'>'
+end
+queue 'X-Mailer: SDSFMail Version 1.02.00'
+queue 'subject: 'subject
+queue 'mime-version: 1.0 '
+queue 'content-type: multipart/mixed; '
+queue '              boundary=  "gc0y0pkb9ex" '
+queue ' '
+queue 'this message is in mime format '
+queue '--gc0y0pkb9ex '
+/* remove parens if pds member */
+subject = translate(subject,'.','(')
+subject = translate(subject,'',')')
+subject = space(subject,0)
+queue 'content-disposition: attachment; filename="'subject'.'ext'"'
+queue ' '
+do kx = 1 to line.0
+  queue output.kx
+end
+queue '--gc0y0pkb9ex-- '
+queue 'Sent by X-Mailer: SDSFMail Version 1.02.00'
+queue '.'
+queue 'quit'
+if prompt = 'YES' then say '***'
+"execio * diskw smtpout (finis"
+say 'email sent by' sndr
+/* switch them to the new destination and turn off error message */
+trace off /* turning off trace to ignore error if multiple syouts */
+ADDRESS SDSF "ISFACT O TOKEN('"TOKEN.ix"') PARM(DESTN "newdest")"
+'free fi(smtpout)'
+trace err
+return
+Timezone:
+/*
+* =============================================================
+* Function: Timezone : Calculates the offset from GMT
+* Arguments: (none) : nothing is required
+* Return: offset : offset in (-)HHMM format
+* Exposed vars: (none) : nothing is exposed
+*
+* Note: Uses the CVTLDTO field in one of the CVT extensions.
+* It looks like this field was added sometime in 1991,
+* so this routine will not work on any OS version older
+* than that.
+* =============================================================
+*/
+PROCEDURE
+/*
+
+===========================================================
+* We're gonna have a big number
+*/
+NUMERIC DIGITS 21
+/* ===========================================================
+* Get current CVTLDTO
+* (Local Date Time Offset in STCK format))
+*/
+cvt = C2d( Storage( D2x( 16 ), 4 ) )
+cvttz = C2d( Storage( D2x( cvt + 304 ), 4 ) )
+cvtext2 = C2d( Storage( D2x( cvt + 328 ), 4 ) )
+cvtldto = C2d( Storage( D2x( cvtext2 + 56 ), 8 ), 8 )
+/* ===========================================================
+* Calc the current offset in hours and minutes
+* (work with absolute)
+*/
+
+absldto = Abs( cvtldto )
+hours = absldto % x2d("D693A400000" )
+minutes = ( absldto % x2d("3938700000") ) // 60
+
+/* ===========================================================
+* Correction to Round to nearest hour
+*/
+If minutes <> "00" Then Do
+If minutes > 30 Then
+hours = hours + 1
+/* minutes = 00 */
+End
+
+/*
+
+===========================================================
+* Format to ANSI standard X3.51-1975
+*/
+zone = Right( hours, 2, "0" )Right( minutes, 2, "0" )
+IF cvtldto < 0 THEN DO
+zone = "-"zone
+END
+ELSE DO
+zone = "+"zone
+END
+
+/* ===========================================================
+* Reset
+*/
+NUMERIC DIGITS
+
+RETURN zone
+error_exit:
+"free fi(mailbook)"
+'free fi(smtpout)'

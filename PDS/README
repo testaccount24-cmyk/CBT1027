@@ -1,0 +1,31 @@
+This application is designed to allow output to be sent to the JES2
+output queue with a pre-determined destination and forms name.  This
+output can then be picked up and sent to an email recipient using the
+address book via the SMTP writer.
+
+The default destination in the rexx code is EMAIL however
+that can be changed.  See the DOC and SAMPLE members for information on
+setting up the address book.
+
+The member SDSFMAIL can be ran ad hoc or on an interval to pick up any
+output with the destination you set up and if there is a member in the
+address book that matches the form on the output queue then the information
+in the address book will be used to send the output as a file to the
+email addresses in the address book.  The address book can also set the
+subject text as well as the ending qualifier of the dataset name.  The file
+will be sent as an attachement. It will then change the destination to a
+different destination to avoid it being resent as a duplicate later.  You
+could also massage the code to delete the output.  SDSFMAIL is intended to be
+executed as a system Rexx command from the console.  You could also set up
+a timer in automation to execute it.  It can also be executed from TSO/ISPF.
+
+Receive the EMAIL XMI format member.
+
+The members MMAIL and XMAIL are provided although most shops probable
+  have similar code. They are TSO/ISPF rexx routines to send a sequential
+  file to an email address.  MMAIL sends as an attachment and XMAIL sends
+  instream.
+
+Paul Lemons
+antlerhill@protonmail.com
+Vericast - Harland Clarke

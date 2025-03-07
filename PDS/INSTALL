@@ -1,0 +1,24 @@
+1 - Receive the member BOOK in this PDS that is in XMI format
+    for example
+    tso receive indsname(this.pds.name(book))
+    dsname('the name you want for your address book pds')
+2 - Modify the address book to use your preferred alias names and email
+    address lists (see samples in the pds you received from the BOOK XMI file)
+    See the member doc in the PDS you created
+3 - Modify the rexx code SDSFMAIL to use your address book dataset name and
+    any other variables.  See the set defaults section.
+
+Two extra members are provided.  MMAIL and XMAIL.  They are variations of the
+  SMPTNOTE code.
+
+Usage
+
+To test.  Modify the JCL in member PRINTJCL in this PDS to fit your standards
+After executing that job you should have output on the JES2 output queue that
+has the destination of EMAIL and a forms name that matches a member in your
+address book.
+
+Execute the SDSFMAIL REXX exec and it should send the output to the email
+address(es) you have provided in the address book.  It will also change the
+destination of that output from email to xmail (or what you set those to be)
+

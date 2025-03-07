@@ -1,0 +1,90 @@
+/* rexx xmail  */
+/* Send a file instream to an email address from TSO */
+/* arg 1 dsn = Dataset */
+/* arg 2 recpt = recepient of mail */
+/* arg 3 sndr = sender */
+/* arg 4 subject = subject */
+/* arg 5 junk = other parms such as cc */
+/* change company variable and to your company */
+/* taltyman (Antlerhill@protonmail.com */
+/* this code is freely given */
+/* Easiest to use via ISPF 3.4 as a line command */
+/* Change company variable to your company email */
+trace err
+parse arg dsn recpt sndr subject junk
+company = 'harlandclarke.com'
+if dsn = '?' then do
+  say 'XMAIL syntax:'
+  say ' '
+  say 'XMAIL DATASETNAME EMAILADDR sender subject'
+  say ' '
+  say '  DATASETNAME is the name of the dataset to be sent (required)'
+  say '  EMAILADDR is the email address of the recepient (required)'
+  say '    will add the company variable if not fully qualified'
+  say '  SENDER is the return address (optional) default is your userid'
+  say '  SUBJECT is the subject for the note (optional)'
+  return
+end
+if length(dsn) = 0 then do
+  say 'email001 - Dataset name missing'
+  return 16
+end
+dsn = strip(dsn,b,"'")
+exist = listdsi("'"dsn"'")
+if length(sysdsname) = 0 then do
+  say 'email010 - data set error for 'dsn
+  say 'email011 - reason code 'sysreason
+  return 16
+end
+if pos(ps,sysdsorg) = 0 then do
+  if index(dsn,'(') > 0 then do
+    meminfo = sysdsn("'"dsn"'")
+    if meminfo <> 'OK' then do
+      say meminfo
+      say 'email012 -' meminfo
+      return 16
+    end
+  end
+  if index(dsn,'(') = 0 then do
+    say 'email013 - data set dsorg 'sysdsorg' invalid'
+    say 'email014 - must be dsorg physical sequential'
+    return 16
+  end
+end
+if length(recpt) = 0 then do
+  say 'email020 - recepient ID required'
+  return 16
+end
+if pos('@',recpt) = 0 then do
+  recpt = space(recpt '@' company,0)
+end
+if length(subject) = 0 then do
+  subject = 'z/OS mail'
+end
+if length(sndr) = 0 then do
+  sndr = userid()
+  sndr = strip(sndr,l,'@')
+end
+if pos('@',sndr) = 0 then do
+  sndr = space(sndr '@' company,0)
+end
+"alloc fi(mailtext) da('"dsn"') shr"
+'alloc fi(smtpout) sysout(b) writer(smtp)'
+"newstack"
+queue 'helo ' mvsvar(sysname)
+queue 'MAIL FROM:<'sndr'>'
+queue 'RCPT TO:<'recpt'>'
+queue 'DATA'
+queue 'FROM: 'sndr' <'sndr'>'
+queue 'TO: <'recpt'>'
+queue 'SUBJECT: 'subject
+queue ' '
+"execio * diskr mailtext (finis"
+queue '.'
+queue 'quit'
+say '***'
+"execio * diskw smtpout (finis"
+say dsn sent to recpt from sndr
+'free fi(smtpout)'
+'free fi(mailtext)'
+return
