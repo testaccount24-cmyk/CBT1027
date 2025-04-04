@@ -1,0 +1,105 @@
+/* rexx mmail  */
+/* Send a file as an attachment to an email address from TSO */
+trace err
+/* arg 1 dsn = Dataset */
+/* arg 2 recpt = recepient of mail */
+/* arg 3 sndr = sender */
+/* arg 4 subject = subject (optional) */
+/* arg 5 junk = other parms such as cc */
+/* taltyman (Antlerhill@protonmail.com */
+/* this code is freely given */
+/* Easiest to use via ISPF 3.4 as a line command */
+/* Change company variable to your company email */
+parse arg dsn recpt sndr subject junk
+company = 'harlandclarke.com'
+if dsn = '?' then do
+  say 'mmail syntax:'
+  say ' '
+  say 'mmail datasetname emailaddr sender subject'
+  say ' '
+  say '  datasetname is the name of the dataset to be sent (required)'
+  say '  emailaddr is the email address of the recepient (required)'
+  say '    will add the company name if not fully qualified'
+  say '  sender is the return address (optional) default is your name'
+  say '  subject is the subject for the note (optional)'
+  return
+end
+if length(dsn) = 0 then do
+  say 'email001 - dataset name missing'
+  return 16
+end
+dsn = strip(dsn,b,"'")
+exist = listdsi("'"dsn"'")
+if length(sysdsname) = 0 then do
+  say 'email010 - data set error for 'dsn
+  say 'email011 - reason code 'sysreason
+  return 16
+end
+if pos(ps,sysdsorg) = 0 then do
+  select
+    when pos(po,sysdsorg) = 1 then do
+      results = SYSDSN("'"dsn"'")
+      if results <> 'OK' then do
+        say 'email015 - member not found'
+        return 16
+      end
+      if index(dsn,'(') = 0 then do
+        say 'email014 - member name must be specified'
+        return 16
+      end
+    end
+    otherwise do
+      say 'email012 - data set dsorg 'SYSDSORG' invalid'
+      say 'email013 - must be dsorg physical sequential'
+      return 16
+    end
+  end
+end
+if length(recpt) = 0 then do
+  say 'email020 - recepient id required'
+  return 16
+end
+if pos('@',recpt) = 0 then do
+  recpt = space(recpt '@' company,0)
+end
+if length(subject) = 0 then do
+  subject = dsn
+end
+if length(sndr) = 0 then do
+  sndr = USERID()
+  sndr = strip(sndr,b,'@')
+  sndr = space(sndr '@' company,0)
+end
+"alloc fi(mailtext) da('"dsn"') shr"
+'alloc fi(smtpout) sysout(b) writer(smtp)'
+"newstack"
+queue 'helo ' mvsvar(sysname)
+queue 'mail from:<'sndr'>'
+queue 'rcpt to:<'recpt'>'
+queue 'data'
+queue 'from: <'sndr'>'
+queue 'to: <'recpt'>'
+queue 'subject: 'subject
+queue 'mime-version: 1.0 '
+queue 'content-type: multipart/mixed; '
+queue '              boundary=  "gc0y0pkb9ex" '
+queue ' '
+queue 'this message is in mime format '
+queue '--gc0y0pkb9ex '
+/* remove parens if pds member */
+subject = translate(subject,'.','(')
+subject = translate(subject,'',')')
+subject = space(subject,0)
+queue 'content-disposition: attachment; filename="'subject'.txt"'
+queue 'content-type: text/html'
+queue ' <pre> <font face="fixedsys" size=1> '
+queue ' '
+"execio * diskr mailtext (finis"
+queue '.'
+queue 'quit'
+say '***'
+"execio * diskw smtpout (finis"
+say dsn 'sent to' recpt 'from' sndr
+'free fi(smtpout)'
+'free fi(mailtext)'
+return

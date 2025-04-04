@@ -1,0 +1,26 @@
+This is used by the email code to relate any output with a destination
+of email with the forms information
+If the destination is email this code gets the form name and looks for
+a member in this PDS that matches.  If found it will use the information in the
+member to generate an email.
+At least one email parm card is required
+
+syntax for parm cards
+email email address to recieve the email
+  email starts in position 1
+  email address value  starts in position 7
+subject text for the subject line (optional)
+  subject starts in position 1
+  subject value starts in position 9
+ext the ending dataset wualifier for the email message file (optional)
+  ext starts in position 1
+  ext value starts in position 5
+
+for example
+
+Member name a041696
+email paul.lemons@vericast.com
+email fred.jones@vericast.com
+email peter.finch@goober.net
+subject Yee Haw
+ext csv

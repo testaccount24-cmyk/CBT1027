@@ -1,0 +1,24 @@
+ CBT file submission
+Subject:  CBT file submission
+From:     "Paul Lemons (Vericast)" <Paul.Lemons@Vericast.com>
+Date:     2/16/2022, 12:24 PM
+To:       "sbgolob@cbttape.org" <sbgolob@cbttape.org>
+
+I have written some code that may be of use.   It has rexx code
+that can be executed via a console to system rexx, to take any
+output on the JES2 output queue with a destination of EMAIL and a
+form that matches a member in an address book, and email that
+output as an attachment.
+
+If you think it warrants being added to the CBT tape then you
+have my permission to do so.  Also check it out to verify it can
+be unzipped and received and my documentation looks good.
+
+
+Paul Lemons
+Systems Engineer IV - Mainframe Infrastucture
+Vericast
+15955 La Cantera Parkway | San Antonio, TX 78256
+Mobile: 214 686-3749 |
+Paul.Lemons@Vericast.com
+
